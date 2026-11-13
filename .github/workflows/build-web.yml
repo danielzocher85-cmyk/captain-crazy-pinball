@@ -8,6 +8,12 @@ on:
 
 permissions:
   contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: github-pages
+  cancel-in-progress: true
 
 jobs:
   compile:
@@ -91,15 +97,37 @@ jobs:
           find engine/bin -maxdepth 1 -type f \( -name '*.html' -o -name '*.wasm' -o -name '*.js' -o -name '*.data' \) -exec cp '{}' site/ \;
           ls -lah site
           test -n "$(find site -name '*.wasm' -print -quit)"
-          cat > site/README.txt <<'EOF'
-          Captain Crazy Pinball - first browser engine compatibility build.
-          This uses unmodified Open Cadet CC0 graphics as a baseline.
-          The custom Captain Crazy table is not yet included.
-          The browser files must be served over HTTP(S), not file://.
-          EOF
+          python3 - <<'PY'
+          from pathlib import Path
+          import shutil
+          site = Path('site')
+          htmls = sorted(site.glob('*.html'))
+          if not htmls:
+              raise SystemExit('No HTML entry point produced')
+          if not (site / 'index.html').exists():
+              shutil.copyfile(htmls[0], site / 'index.html')
+          print('Entry point:', (site / 'index.html').stat().st_size, 'bytes')
+          PY
+          touch site/.nojekyll
 
       - name: Upload downloadable WebAssembly build
         uses: actions/upload-artifact@v4
         with:
           name: captain-crazy-browser-test
           path: site/
+
+      - name: Upload GitHub Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site/
+
+  deploy:
+    needs: compile
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
