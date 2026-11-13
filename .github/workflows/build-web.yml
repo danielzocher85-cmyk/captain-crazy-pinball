@@ -175,6 +175,54 @@ jobs:
           print('Mobile touch controls injected')
           PYMOBILE
 
+      - name: Captain Crazy arcade skin V7
+        shell: bash
+        run: |
+          python3 - <<'PYTHEME'
+          from pathlib import Path
+          p = Path('site/index.html')
+          html = p.read_text()
+          theme = r"""
+          <style id="captain-crazy-theme">
+          html{background:#090416!important;min-height:100%;}
+          body{background:radial-gradient(ellipse at 50% 12%,#3b1462 0%,#140828 45%,#090416 100%)!important;color:#f8f0ff!important;margin:0!important;min-height:100vh;font-family:system-ui,sans-serif!important;}
+          #cc-arcade-header{position:relative;z-index:5;text-align:center;padding:12px 8px 8px;pointer-events:none;}
+          #cc-arcade-header .cc-kicker{font:800 clamp(10px,2.7vw,13px)/1.2 system-ui;letter-spacing:.28em;color:#ff9c3a;}
+          #cc-arcade-header h1{font:1000 clamp(22px,5.8vw,42px)/1.08 system-ui;margin:3px 0 2px;color:#c5ff39;text-shadow:0 0 14px #b1ff58aa,2px 3px 0 #6d259b;}
+          #cc-arcade-header .cc-sub{font:700 clamp(10px,2.7vw,13px)/1.4 system-ui;letter-spacing:.15em;color:#ff6dd5;}
+          #cc-arcade-header .cc-tag{font:600 11px system-ui;color:#c7b4e6;margin-top:3px;}
+          #cc-mobile-controls{background:linear-gradient(180deg,#27104df5,#0f0723fa)!important;border-top:2px solid #b452ff;box-shadow:0 -5px 22px #6d2cf344;}
+          #cc-mobile-controls button{border-radius:15px!important;background:linear-gradient(160deg,#55238a,#30145d)!important;border-color:#d26bff!important;box-shadow:inset 0 1px 0 #ffffff35,0 3px 0 #18092f;font-weight:900!important;letter-spacing:.02em;}
+          #cc-mobile-controls button[data-key=Space]{background:linear-gradient(160deg,#f88b25,#a54418)!important;border-color:#ffc05e!important;}
+          #cc-mobile-controls button[data-key=F2]{background:linear-gradient(160deg,#668b15,#35530b)!important;border-color:#c5ff39!important;}
+          #cc-mobile-controls button:active{filter:brightness(1.45);transform:translateY(2px);}
+          #canvas{border:2px solid #8c3de0!important;box-shadow:0 0 24px #7a2ae255!important;border-radius:7px;}
+          @media(max-width:600px){#cc-arcade-header{padding-top:8px}#cc-mobile-controls button{font-size:13px!important;min-height:58px!important}}
+          @media(prefers-reduced-motion:reduce){#cc-mobile-controls button{transition:none!important}}
+          </style>
+          <header id="cc-arcade-header" aria-label="Captain Crazy Pinball Madness">
+            <div class="cc-kicker">WELCOME TO THE MADVERSE</div>
+            <h1>CAPTAIN CRAZY</h1>
+            <div class="cc-sub">PINBALL MADNESS</div>
+            <div class="cc-tag">COSMIC ARCADE · EARLY ACCESS</div>
+          </header>
+          <script>
+          (function(){
+            function place(){var header=document.getElementById('cc-arcade-header');if(!header)return;
+              var canvas=document.getElementById('canvas');
+              if(canvas){var parent=canvas.parentElement; if(parent&&parent!==document.body&&parent.parentElement){parent.parentElement.insertBefore(header,parent);}else{document.body.insertBefore(header,document.body.firstChild);}}
+              else{document.body.insertBefore(header,document.body.firstChild);}
+            }
+            if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',place,{once:true});else place();
+          })();
+          </script>
+          """
+          if '</body>' not in html or 'cc-mobile-controls' not in html:
+              raise SystemExit('Expected V6 HTML controls not found')
+          p.write_text(html.replace('</body>',theme+'\n</body>',1))
+          print('Captain Crazy V7 arcade skin applied; V6 controls and engine preserved')
+          PYTHEME
+
       - name: Upload downloadable WebAssembly build
         uses: actions/upload-artifact@v4
         with:
