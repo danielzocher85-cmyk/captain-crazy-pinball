@@ -1,0 +1,105 @@
+name: Captain Crazy Pinball - WebAssembly
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/build-web.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  compile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Checkout this repository
+        uses: actions/checkout@v4
+
+      - name: Install Emscripten
+        uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: '3.1.74'
+
+      - name: Download MIT game engine and CC0 game data
+        shell: bash
+        run: |
+          git clone --depth 1 https://github.com/k4zmu2a/SpaceCadetPinball.git engine
+          git clone --depth 1 https://github.com/andrewnakas/open-cadet.git open-cadet
+          test -s open-cadet/PINBALL.DAT
+          test -f engine/CMakeLists.txt
+          mkdir -p data
+          cp open-cadet/PINBALL.DAT data/
+          find open-cadet -type f -name 'sound*.wav' -exec cp '{}' data/ \;
+          echo "CC0 sound files: $(find data -name 'sound*.wav' | wc -l)"
+          test "$(find data -name 'sound*.wav' | wc -l)" -ge 40
+
+      - name: Prepare CMake for Emscripten
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('engine/CMakeLists.txt')
+          s = p.read_text()
+          old = 'find_package(SDL2 REQUIRED)\nFIND_PACKAGE(SDL2_mixer REQUIRED)'
+          if old not in s:
+              raise SystemExit('CMake SDL dependency signature changed upstream')
+          s = s.replace(old, '''if(EMSCRIPTEN)
+            set(SDL2_INCLUDE_DIR "${CMAKE_SYSROOT}/include/SDL2")
+            set(SDL2_MIXER_INCLUDE_DIR "${CMAKE_SYSROOT}/include/SDL2")
+            set(SDL2_LIBRARY "")
+            set(SDL2_MIXER_LIBRARY "")
+          else()
+            find_package(SDL2 REQUIRED)
+            FIND_PACKAGE(SDL2_mixer REQUIRED)
+          endif()''')
+          old2 = 'target_link_libraries(SpaceCadetPinball ${SDL2_LIBRARY} ${SDL2_MIXER_LIBRARY})'
+          if old2 not in s:
+              raise SystemExit('CMake link signature changed upstream')
+          s = s.replace(old2, old2 + '''
+          if(EMSCRIPTEN)
+            set_target_properties(SpaceCadetPinball PROPERTIES SUFFIX ".html")
+            target_compile_options(SpaceCadetPinball PRIVATE "-sUSE_SDL=2" "-sUSE_SDL_MIXER=2")
+            target_link_options(SpaceCadetPinball PRIVATE
+              "-sUSE_SDL=2" "-sUSE_SDL_MIXER=2"
+              "-sALLOW_MEMORY_GROWTH=1"
+              "-sFORCE_FILESYSTEM=1"
+              "-sEXIT_RUNTIME=0"
+              "SHELL:--preload-file ${CMAKE_SOURCE_DIR}/../data@/"
+            )
+          endif()
+          ''')
+          p.write_text(s)
+          print('Emscripten CMake adaptation prepared')
+          PY
+
+      - name: Configure
+        shell: bash
+        run: |
+          emcmake cmake -S engine -B build -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_CXX_FLAGS='-Wno-error'
+
+      - name: Compile
+        shell: bash
+        run: cmake --build build --parallel 2
+
+      - name: Bundle browser files
+        shell: bash
+        run: |
+          mkdir -p site
+          find engine/bin -maxdepth 1 -type f \( -name '*.html' -o -name '*.wasm' -o -name '*.js' -o -name '*.data' \) -exec cp '{}' site/ \;
+          ls -lah site
+          test -n "$(find site -name '*.wasm' -print -quit)"
+          cat > site/README.txt <<'EOF'
+          Captain Crazy Pinball - first browser engine compatibility build.
+          This uses unmodified Open Cadet CC0 graphics as a baseline.
+          The custom Captain Crazy table is not yet included.
+          The browser files must be served over HTTP(S), not file://.
+          EOF
+
+      - name: Upload downloadable WebAssembly build
+        uses: actions/upload-artifact@v4
+        with:
+          name: captain-crazy-browser-test
+          path: site/
