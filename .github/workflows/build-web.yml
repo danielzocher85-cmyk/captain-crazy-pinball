@@ -132,6 +132,48 @@ jobs:
           print('Entry point:', (site / 'index.html').stat().st_size, 'bytes')
           PY
           touch site/.nojekyll
+          # Add mobile touch controls to the generated Emscripten page.
+          python3 - <<'PYMOBILE'
+          from pathlib import Path
+          p = Path('site/index.html')
+          html = p.read_text()
+          overlay = r"""
+          <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover">
+          <style>
+          #cc-mobile-controls{position:fixed;bottom:0;left:0;right:0;z-index:99999;display:flex;gap:7px;padding:9px 8px calc(9px + env(safe-area-inset-bottom));background:#130922ee;justify-content:center;align-items:center;touch-action:none;user-select:none;-webkit-user-select:none}
+          #cc-mobile-controls button{flex:1;min-height:62px;border:2px solid #b15aff;border-radius:12px;background:#392067;color:#fff;font:bold 15px system-ui;touch-action:none;-webkit-tap-highlight-color:transparent}
+          #cc-mobile-controls button[data-key=Space]{background:#a94d17;border-color:#ffae4e}
+          #cc-mobile-controls button:active{background:#7b29bd}
+          #canvas{max-width:100vw!important}
+          body{padding-bottom:86px!important}
+          </style>
+          <div id="cc-mobile-controls" aria-label="Mobile pinball controls">
+            <button data-key="F2">START</button>
+            <button data-key="KeyZ">◀ LEFT</button>
+            <button data-key="Space">LAUNCH</button>
+            <button data-key="Slash">RIGHT ▶</button>
+          </div>
+          <script>
+          (function(){
+            var keys={F2:{key:'F2',code:'F2',keyCode:113},KeyZ:{key:'z',code:'KeyZ',keyCode:90},Space:{key:' ',code:'Space',keyCode:32},Slash:{key:'/',code:'Slash',keyCode:191}};
+            var held=new Map();
+            function send(code,down){var k=keys[code];if(!k)return;var e=new KeyboardEvent(down?'keydown':'keyup',{key:k.key,code:k.code,keyCode:k.keyCode,which:k.keyCode,bubbles:true,cancelable:true});
+              document.dispatchEvent(e);}
+            document.querySelectorAll('#cc-mobile-controls button').forEach(function(btn){
+              var code=btn.dataset.key;
+              btn.addEventListener('pointerdown',function(e){e.preventDefault();btn.setPointerCapture(e.pointerId);if(!held.has(e.pointerId)){held.set(e.pointerId,code);send(code,true);}});
+              function release(e){e.preventDefault();if(held.has(e.pointerId)){send(held.get(e.pointerId),false);held.delete(e.pointerId);}}
+              btn.addEventListener('pointerup',release);btn.addEventListener('pointercancel',release);btn.addEventListener('lostpointercapture',function(e){if(held.has(e.pointerId)){send(held.get(e.pointerId),false);held.delete(e.pointerId);}});
+            });
+            window.addEventListener('blur',function(){held.forEach(function(code){send(code,false)});held.clear()});
+          })();
+          </script>
+          """
+          if '</body>' not in html:
+              raise SystemExit('Generated Emscripten HTML has no body end tag')
+          p.write_text(html.replace('</body>', overlay + '\n</body>', 1))
+          print('Mobile touch controls injected')
+          PYMOBILE
 
       - name: Upload downloadable WebAssembly build
         uses: actions/upload-artifact@v4
